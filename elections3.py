@@ -53,7 +53,7 @@ def check_valid_votes(votelist):  # checks for valid votes and removes any that 
 
     return votelist
 
-def vote_transfer(method, column_tally, eliminated_names, eliminated_name):  # transfers votes, sums the previous votes with the new ones and returns the result as a dictionary
+def vote_transfer(method, column_tally, eliminated_names, eliminated_name, max_votes={}):  # transfers votes, sums the previous votes with the new ones and returns the result as a dictionary
     transferred_votes = {}
 
     # if '' in candidates:
@@ -69,7 +69,8 @@ def vote_transfer(method, column_tally, eliminated_names, eliminated_name):  # t
                         continue
                     else:
                         try:
-                            transferred_votes[row[row.index(name) + 1]] += surplus
+                            if row[row.index(name) + 1] not in max_votes:
+                                transferred_votes[row[row.index(name) + 1]] += surplus
                         except KeyError:
                             if next_name == '':
                                 print("No one to transfer votes to!")
@@ -139,6 +140,7 @@ def winning_condition(method, valid_votes, seats):
 def count():  # this is the framework for the counting process for each sheet
     tally = []
     filled_seats = 0
+    max_names = []
     for row in rows:
         tally.append(row[0])
     column_tally = Counter(tally)  # counts the votes
@@ -161,6 +163,7 @@ def count():  # this is the framework for the counting process for each sheet
         max_name = max(column_tally, key=column_tally.get)
         max_names.append(max_name)
         max_vote = column_tally[max_name]
+        max_votes = {}
 
         for cand in candidates:  # check for winners
             print("UNIT: for cand in candidates")
@@ -168,6 +171,7 @@ def count():  # this is the framework for the counting process for each sheet
                 print(cand + " has achieved the victory condition and is elected.")
                 winners.append(cand)
                 winner_votes.append(column_tally[cand])
+                max_votes[cand] = column_tally[cand]
                 filled_seats += 1
             else:
                 print(cand + " has not won.")
@@ -183,22 +187,34 @@ def count():  # this is the framework for the counting process for each sheet
             elif method == 'stv':
                 # 1st process: if there have been any winners, distribute their excess votes to the next candidate in fractional proportion to their total votes
                 if max_vote > winning_votes:
-                    surplus_votes = max_vote - winning_votes
-                try:
-                    surplus_votes
-                except NameError:
-                    print("There has been no winners in this round, moving on to process 2: distributing the losing candidate's votes.")
+                    for name in max_votes:
+                        print(
+                            f"{name} exceeds the Droop quota of {str(winning_votes)} with {str(max_votes[name])} votes. Their {str(max_votes[name] - winning_votes)} surplus votes are distributed fractionally to the subsequent preference candidates.")
+                        vote_transfer('stv_winner', column_tally, max_names, name,
+                                      max_votes)  # transfer surplus votes from all elected candidates to their subsequent preferences
+                        # questions: do the surplus votes of secondary winners get transferred before or after they've been added to from the primary winner?
                     vote_transfer('stv_loser', column_tally, min_names, min_name)
                 else:
-
-                    print("The candidate with the highest votes is " + max_name + " with " + str(max_vote) + " votes. Their " + str(surplus_votes) + " surplus votes are distributed fractionally to the subsequent preference candidates.")
-                    vote_transfer('stv_winner', column_tally, max_names, max_name)
+                    print(
+                        "There have been no winners in this round, moving on to process 2: distributing the losing candidate's votes.")
                     vote_transfer('stv_loser', column_tally, min_names, min_name)
-
-
         else:
             end_sequence(winners, winner_votes)
             break
+'''
+                try:
+                    surplus_votes
+                except NameError:
+                    print("There have been no winners in this round, moving on to process 2: distributing the losing candidate's votes.")
+                    vote_transfer('stv_loser', column_tally, min_names, min_name)
+                else:
+                    for name in max_votes:
+                        print(f"{name} exceeds the Droop quota of {str(winning_votes)} with {str(max_votes[name])} votes. Their {str(max_votes[name] - winning_votes)} surplus votes are distributed fractionally to the subsequent preference candidates.")
+                        vote_transfer('stv_winner', column_tally, max_names, name, max_votes)  # transfer surplus votes from all elected candidates to their subsequent preferences
+                        # questions: do the surplus votes of secondary winners get transferred before or after they've been added to from the primary winner?
+                    vote_transfer('stv_loser', column_tally, min_names, min_name)
+'''
+
 
 def end_sequence(winners, winner_votes):
     print("The winners are " + str(winners) + " with respective votes " + str(winner_votes))
@@ -215,7 +231,6 @@ for sh in range(wb.nsheets):  # the main program loop, iterating through all the
     winner_votes = []
     winner_status = False
     min_names = []
-    max_names = []
     transferred_votes = {}
 
     for rows_index in range(rowsno):  # create a list of lists, each list corresponding to a row in the spreadsheet
